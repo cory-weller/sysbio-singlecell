@@ -143,3 +143,13 @@ def to_ranges(nums):
             start = prev = n
     ranges.append((start, prev))
     return ranges
+
+def find_file(pattern):
+    try:
+        result = subprocess.run(['find', '.', '-type', 'f', '-name', pattern], capture_output=True, text=True).stdout.strip()
+        if len(result.split()) > 1:
+            raise RuntimeError("Multiple files found for pattern {pattern}, this pattern should be unique")
+        return(Path(result).resolve().absolute())
+    except:
+        raise
+
