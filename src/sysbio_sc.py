@@ -74,21 +74,6 @@ def get_slurm_array_id():
     except KeyError as e:
         raise KeyError(f"No SLURM job array task ID detected within environment, check this is running via sbatch --array") from e
 
-def scratch(path):
-    # Attempts to touch lscratch tmp directory
-    # returns itself if successful
-    try:
-        temp_dir = Path(path).absolute()
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        test_file = temp_dir / '.test'
-        test_file.touch()
-        return temp_dir
-    except FileNotFoundError as e:
-        raise FileNotFoundError(f"Couldn't set working directory to {temp_dir}, was resource requested with sbatch?") from e
-    except PermissionError as e:
-        raise PermissionError(f"No write permissions available for {temp_dir}, check directory is correct and/or permissions") from e
-
-
 def require_path(path, label, kind, create=False):
     """kind must be 'file' or 'dir'."""
     if kind not in ("file", "dir"):
