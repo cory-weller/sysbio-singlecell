@@ -31,8 +31,9 @@ cellbender:
     clobber: False
     rerun_debug: False
     version: 0.3.2
+    expected_cells: 20000
     slurm:
-        conda_env: None
+        conda_env: sysbio-sc
         modules:
             - cellbender/0.3.2
         array_limit: 50
@@ -44,3 +45,5 @@ cellbender:
         gres:
             lscratch: 400    # GB requested in local scratch
             gpu:v100x: 1     # one v100x gpu
+metadata:
+    sample_libraries: AMP-AD_DiverseCohorts_assay_multiome_metadata.csv
