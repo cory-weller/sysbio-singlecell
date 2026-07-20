@@ -10,6 +10,9 @@ except ModuleNotFoundError:
     sys.path.append('src')
     from sysbio_sc import *
 
+# make generalizable format where config.step refers to this step in processing
+step = 'cellbender'
+config.step = config[step]
 
 #===================================================================================================
 # 01 Load config
@@ -19,9 +22,6 @@ project_dir = get_project_dir()                                 # Returns PosixP
 configfile = project_dir / 'config.yaml'                 # Default config name within project_dir
 config = import_config(configfile)                              # Loads as DotDict; exits if cannot load
 data_dir = project_dir / config.data_dir
-
-step = 'cellranger'
-config.step = config[step]
 
 #===================================================================================================
 # Pre-run checks
@@ -36,40 +36,32 @@ if config.step.rerun_debug in falsy:
 slurm = config.step.slurm
 
 sbatch_file = require_path(path=project_dir / 'src' / 'sbatch-wrapper.sh', label='sbatch wrapper script', kind='file', create=False)
-transcriptome_dir = require_path(config.step.transcriptome, label='cellrange transcriptome', kind='dir', create=False)
-
-
 
 
 
 #===================================================================================================
 #  RUN
 #===================================================================================================
-library_file
+
 # generate library ID file if it does not exist
-library_id_file = data_dir / 'libraryIDs.txt'
-library_metadata_file = find_file(config.metadata.sample_libraries)
-if not library_id_file.exists():
-    dat = pd.read_csv(library_metadata_file)['libraryBatch'].unique()
-    df = pd.DataFrame({
-        'N': range(1, len(dat)+1),
-        'libraryID': [x+'-GEX' for x in dat]
-    })
-    df.to_csv(library_id_file, index=False, sep='\t')
-else:
-    df = pd.read_csv(library_id_file, sep='\t')
+library_id_file = require_path(path = data_dir / 'libraryIDs.txt', label='LibraryID:N mapping file', type='file', create=False)
+df = pd.read_csv(library_id_file, sep='\t')
 
 
 # Collect list of samples that haven't been done
 ids_to_run = []
 ids_finished = []
 
+
+
 if config.step.rerun_debug is None:
     for libraryID in df['libraryID']:
-        test_done_file = Path(f"{config.data_dir}/CELLRANGER/{libraryID}/filtered_feature_bc_matrix.h5")
-        if test_done_file.exists():
+        output = Path(data_dir / 'CELLBENDER' / libraryID /'output_filtered.h5')
+        if output.exists():
             ids_finished.append(libraryID)
-        elif not test_done_file.exists() or config.step.clobber is True:
+        elif not output.exists() or config.step.clobber is True:
+            # Ensure input exists
+            input = require_path(path=data_dir / 'CELLRANGER' / libraryID /'raw_feature_bc_matrix.h5', label='raw cellranger h5', type='file', create=False)
             sample_N = int(df.loc[df['libraryID'] == libraryID, 'N'].iloc[0])
             ids_to_run.append(sample_N)
 else:
@@ -83,7 +75,7 @@ print(f"INFO: {len(ids_finished)} samples already finished")
 print(f"INFO: {len(ids_to_run)} samples to run")
 
 if len(ids_to_run) == 0:
-    raise RuntimeError("All outputs exist, nothing to do unless cellranger clobber is set to True!")
+    raise RuntimeError("All outputs exist, nothing to do unless cellbender clobber is set to True!")
 
 # Convert list of sample numbers to ranges for job array
 ranges_to_run = to_ranges(ids_to_run)
@@ -91,7 +83,7 @@ array_string = ','.join([f"{rng[0]}-{rng[1]}" for rng in ranges_to_run])
 gres_string = ','.join([f"{x}:{slurm.gres[x]}" for x in slurm.gres])
 slurm.modules = ' '.join(slurm.modules)         # string separate by spaces, in case of multiple args
 
-python_script = data_dir / 'src' / 'cellranger-run.py'
+python_script = data_dir / 'src' / 'cellbender-run.py'
 
 
 custom_env = os.environ.copy()
