@@ -63,7 +63,7 @@ input_h5 = require_path(path=data_dir / 'CELLRANGER' / library_id / 'raw_feature
                         kind='file',
                         create=False)
 
-output_h5 = data_dir / 'CELLBENDER' / f'{library_id}.h5'
+output_h5 = data_dir / 'CELLBENDER' / library_id / 'cellbender.h5'
 check_write_access(output_h5.parent)
 
 
