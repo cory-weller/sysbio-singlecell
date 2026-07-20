@@ -1,0 +1,46 @@
+data_dir: 'DATA'
+datasets:
+    - syn51753257   # metadata folder
+    - syn53643818   # fastqs folder
+token: ~/.synapsetoken
+clobber: False
+file_metadata: 'synapse-file-metadata.tsv'
+scratch: /lscratch                  # Temporary directory
+conda_source: myconda               # e.g. when running "source myconda" before activating conda environments
+cellranger:
+    clobber: False
+    rerun_debug:  False            # force any single sample to be reran by itself, ignoring all other samples
+    version: 10.1.0
+    tool: count
+    assay: Gene Expression
+    transcriptome: /fdb/cellranger/refdata-gex-GRCh38-2024-A
+    chemistry: ARC-v1
+    slurm:
+        conda_env: sysbio-sc
+        modules:
+            - cellranger/10.1.0
+        array_limit: 50         # maximum number of concurrent jobs running
+        mem: 64G                # Suggested: 64G
+        partition: quick,norm        # Suggested: norm
+        cpus:   8               # Suggested: 8
+        walltime: '8:00:00'     # hours:min:sec, suggested: 8:00:00
+        ntasks: 1
+        gres:                   # other resource request
+            lscratch:   400     # GB requested in local scratch
+cellbender:
+    clobber: False
+    rerun_debug: False
+    version: 0.3.2
+    slurm:
+        conda_env: None
+        modules:
+            - cellbender/0.3.2
+        array_limit: 50
+        mem: 64G
+        partition: gpu
+        cpus: 1
+        walltime: 8:00:00
+        ntasks: 1
+        gres:
+            lscratch: 400    # GB requested in local scratch
+            gpu:v100x: 1     # one v100x gpu

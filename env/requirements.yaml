@@ -1,0 +1,12 @@
+name: sysbio-sc
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=>3.11
+  - pandas
+  - numpy
+  - regex
+  - pip                    # <- must be listed as a conda dependency
+  - pip:
+      - synapseclient
