@@ -10,9 +10,6 @@ except ModuleNotFoundError:
     sys.path.append('src')
     from sysbio_sc import *
 
-# make generalizable format where config.step refers to this step in processing
-step = 'cellbender'
-config.step = config[step]
 
 #===================================================================================================
 # 01 Load config
@@ -22,6 +19,10 @@ project_dir = get_project_dir()                                 # Returns PosixP
 configfile = project_dir / 'config.yaml'                 # Default config name within project_dir
 config = import_config(configfile)                              # Loads as DotDict; exits if cannot load
 data_dir = project_dir / config.data_dir
+
+# make generalizable format where config.step refers to this step in processing
+step = 'cellbender'
+config.step = config[step]
 
 #===================================================================================================
 # Pre-run checks
@@ -44,14 +45,13 @@ sbatch_file = require_path(path=project_dir / 'src' / 'sbatch-wrapper.sh', label
 #===================================================================================================
 
 # generate library ID file if it does not exist
-library_id_file = require_path(path = data_dir / 'libraryIDs.txt', label='LibraryID:N mapping file', type='file', create=False)
+library_id_file = require_path(path = data_dir / 'libraryIDs.txt', label='LibraryID:N mapping file', kind='file', create=False)
 df = pd.read_csv(library_id_file, sep='\t')
 
 
 # Collect list of samples that haven't been done
 ids_to_run = []
 ids_finished = []
-
 
 
 if config.step.rerun_debug is None:
@@ -64,6 +64,7 @@ if config.step.rerun_debug is None:
             input = require_path(path=data_dir / 'CELLRANGER' / libraryID /'raw_feature_bc_matrix.h5', label='raw cellranger h5', type='file', create=False)
             sample_N = int(df.loc[df['libraryID'] == libraryID, 'N'].iloc[0])
             ids_to_run.append(sample_N)
+    print(f"INFO: {len(ids_finished)} samples already finished")
 else:
     try:
         sample_N = int(df.loc[df['libraryID'] == config.step.rerun_debug, 'N'].iloc[0])
@@ -71,8 +72,8 @@ else:
     except IndexError as e:
         raise RuntimeError(f"ERROR: Tried to run explicitly with a single sample, {config.step.rerun_debug}, which does not exist in {config.data_dir}/libraryIDs.txt") from e
 
-print(f"INFO: {len(ids_finished)} samples already finished")
-print(f"INFO: {len(ids_to_run)} samples to run")
+
+print(f"INFO: {len(ids_to_run)} sample(s) to run")
 
 if len(ids_to_run) == 0:
     raise RuntimeError("All outputs exist, nothing to do unless cellbender clobber is set to True!")

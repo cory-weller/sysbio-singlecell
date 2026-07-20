@@ -52,16 +52,14 @@ os.chdir(temp_dir)
 
 cmd = ['cellbender','remove-background', '--cuda',
        '--input', input_h5,
-       '--output', output,
+       '--output', output_h5]
 
-
-    '--nosecondary']
 try:
     subprocess.run(cmd)
-    # Copy outputs back to permanent dir after running
-    shutil.copytree(src=f"{library_id}_out/outs",
-                    dst=output_dir, 
-                    dirs_exist_ok=True)
+    # # Copy outputs back to permanent dir after running
+    # shutil.copytree(src=f"{library_id}_out/outs",
+    #                 dst=output_dir, 
+    #                 dirs_exist_ok=True)
 except:
-    sys.exit('ERROR: cellranger runtime error')
-
+    print('Error while running cellbender')
+    raise 

@@ -29,7 +29,7 @@ cellranger:
             lscratch:   400     # GB requested in local scratch
 cellbender:
     clobber: False
-    rerun_debug: False
+    rerun_debug: VR001-GEX
     version: 0.3.2
     expected_cells: 20000
     slurm:
@@ -40,7 +40,7 @@ cellbender:
         mem: 64G
         partition: gpu
         cpus: 1
-        walltime: 8:00:00
+        walltime: '8:00:00'
         ntasks: 1
         gres:
             lscratch: 400    # GB requested in local scratch

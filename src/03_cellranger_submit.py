@@ -45,7 +45,7 @@ transcriptome_dir = require_path(config.step.transcriptome, label='cellrange tra
 #===================================================================================================
 #  RUN
 #===================================================================================================
-library_file
+
 # generate library ID file if it does not exist
 library_id_file = data_dir / 'libraryIDs.txt'
 library_metadata_file = find_file(config.metadata.sample_libraries)
