@@ -7,17 +7,7 @@ Note: First activate conda environment that contains `asyncio`, `synapseclient`,
 
 # python version
 python3 01_get_metadata.py
-```
-
-```bash
-# notebook version
-# jupyter nbconvert --to notebook --execute 02_file_download.ipynb --output 02_result.ipynb
-
-# python version
 python3 02_file_download.py
-```
-
-```bash
-# Run without any special environment
-python3 03_submit_cellranger.py
+python3 03_cellranger_submit.py
+python3 04_cellbender_submit.py
 ```
