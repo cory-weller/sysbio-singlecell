@@ -25,43 +25,60 @@ config.step = config[step]
 #===================================================================================================
 # 02 Pre-run Checks
 #===================================================================================================
-data_dir = require_path(project_dir / config.data_dir, label='data_dir', kind='dir', create=True)
-library_id_file = require_path(data_dir / 'libraryIDs.txt', label='library_id_file', kind='file', create=False)
+data_dir = require_path(project_dir / config.data_dir, 
+                        label='data_dir',
+                        kind='dir', 
+                        create=True)
+
+library_id_file = require_path(data_dir / 'libraryIDs.txt',
+                               label='library_id_file',
+                               kind='file',
+                               create=False)
 
 
 
 slurm_id = get_slurm_id()                                       # Exits if no SLURM_JOB_ID
 slurm_array_id = get_slurm_array_id()                           # Exits if no SLURM_ARRAY_TASK_ID
-temp_dir = require_path(f"{config.scratch}/{slurm_id}", label='temporary workign directory', kind='dir', create=True)              
+
+temp_dir = require_path(f"{config.scratch}/{slurm_id}",
+                        label='temporary workign directory',
+                        kind='dir',
+                        create=True)                            #
+
 check_write_access(temp_dir)                                    # Exits if not writable
 require_command('cellbender')                                   # Exits if command not in PATH
 
 
 #===================================================================================================
-#  03 Build --libraries csv for running cellbender
+#  03 Get run-specific ID and file parameters
 #===================================================================================================
 df = pd.read_csv(library_id_file, sep='\t')
 print(slurm_array_id)
 library_id = df.loc[df['N'] == slurm_array_id, 'libraryID'].iloc[0]
 print(library_id)
 
-input_h5 = require_path(path=data_dir / 'CELLRANGER' / library_id / 'raw_feature_bc_matrix.h5', label='cellranger h5', kind='file', create=False)
+
+input_h5 = require_path(path=data_dir / 'CELLRANGER' / library_id / 'raw_feature_bc_matrix.h5', 
+                        label='cellranger h5',
+                        kind='file',
+                        create=False)
+
 output_h5 = data_dir / 'CELLBENDER' / f'{library_id}.h5'
 check_write_access(output_h5.parent)
 
-# os.chdir(temp_dir)
 
+#===================================================================================================
+#  04 Run Cellbender
+#===================================================================================================
+os.chdir(temp_dir)          # Separate job-specific directory required for checkpoint files to not collide with other jobs
 
+# 'bash' required as 'cellbender' is an alias for singularity script on biowulf that lacks shebang
 cmd = ['bash', 'cellbender','remove-background', '--cuda',
        '--input', input_h5,
        '--output', output_h5]
 
 try:
     subprocess.run(cmd)
-    # # Copy outputs back to permanent dir after running
-    # shutil.copytree(src=f"{library_id}_out/outs",
-    #                 dst=output_dir, 
-    #                 dirs_exist_ok=True)
 except:
     print('Error while running cellbender')
     raise 
