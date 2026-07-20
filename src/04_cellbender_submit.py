@@ -44,7 +44,7 @@ sbatch_file = require_path(path=project_dir / 'src' / 'sbatch-wrapper.sh', label
 #  RUN
 #===================================================================================================
 
-# generate library ID file if it does not exist
+# Load library ID file
 library_id_file = require_path(path = data_dir / 'libraryIDs.txt', label='LibraryID:N mapping file', kind='file', create=False)
 df = pd.read_csv(library_id_file, sep='\t')
 
@@ -61,7 +61,7 @@ if config.step.rerun_debug is None:
             ids_finished.append(libraryID)
         elif not output.exists() or config.step.clobber is True:
             # Ensure input exists
-            input = require_path(path=data_dir / 'CELLRANGER' / libraryID /'raw_feature_bc_matrix.h5', label='raw cellranger h5', type='file', create=False)
+            input = require_path(path=data_dir / 'CELLRANGER' / libraryID /'raw_feature_bc_matrix.h5', label='raw cellranger h5', kind='file', create=False)
             sample_N = int(df.loc[df['libraryID'] == libraryID, 'N'].iloc[0])
             ids_to_run.append(sample_N)
     print(f"INFO: {len(ids_finished)} samples already finished")
@@ -84,7 +84,7 @@ array_string = ','.join([f"{rng[0]}-{rng[1]}" for rng in ranges_to_run])
 gres_string = ','.join([f"{x}:{slurm.gres[x]}" for x in slurm.gres])
 slurm.modules = ' '.join(slurm.modules)         # string separate by spaces, in case of multiple args
 
-python_script = data_dir / 'src' / 'cellbender-run.py'
+python_script = require_path(project_dir / 'src' / 'cellbender-run.py', label = 'cellbender python script', kind='file', create=False)
 
 
 custom_env = os.environ.copy()
@@ -94,19 +94,21 @@ custom_env["SCRIPT_PATH"] = python_script
 
 
 sbatch_cmd = ['sbatch', 
-                '--export',         'ALL',
-                '--array',       f"{array_string}%{slurm.array_limit}",
-                '--partition',      slurm.partition,
-                '--cpus-per-task',  slurm.cpus,
-                '--mem',            slurm.mem,
-                '--time',           slurm.walltime,
-                '--ntasks',         slurm.ntasks,
-                '--gres',           gres_string,
+                '--export=ALL',
+                f"--array={array_string}%{slurm.array_limit}",
+                f"--partition={slurm.partition}",
+                f"--cpus-per-task={slurm.cpus}",
+                f"--mem={slurm.mem}",
+                f"--time={slurm.walltime}",
+                f"--ntasks={slurm.ntasks}",
+                f"--gres={gres_string}",
                 sbatch_file,
                 slurm.modules
             ]
 
+sbatch_cmd = [str(x) for x in sbatch_cmd]
+
 print("Running command:")
-print(' '.join([str(x) for x in sbatch_cmd]))
+print(' '.join(sbatch_cmd))
 
 subprocess.run(sbatch_cmd, env=custom_env)

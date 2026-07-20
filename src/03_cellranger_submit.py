@@ -91,7 +91,7 @@ array_string = ','.join([f"{rng[0]}-{rng[1]}" for rng in ranges_to_run])
 gres_string = ','.join([f"{x}:{slurm.gres[x]}" for x in slurm.gres])
 slurm.modules = ' '.join(slurm.modules)         # string separate by spaces, in case of multiple args
 
-python_script = data_dir / 'src' / 'cellranger-run.py'
+python_script = project_dir / 'src' / 'cellranger-run.py'
 
 
 custom_env = os.environ.copy()
@@ -113,7 +113,9 @@ sbatch_cmd = ['sbatch',
                 slurm.modules
             ]
 
+sbatch_cmd = [str(x) for x in sbatch_cmd]
+
 print("Running command:")
-print(' '.join([str(x) for x in sbatch_cmd]))
+print(' '.join(sbatch_cmd))
 
 subprocess.run(sbatch_cmd, env=custom_env)

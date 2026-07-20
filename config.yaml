@@ -29,21 +29,20 @@ cellranger:
             lscratch:   400     # GB requested in local scratch
 cellbender:
     clobber: False
-    rerun_debug: VR001-GEX
+    rerun_debug: False      # VR001-GEX
     version: 0.3.2
-    expected_cells: 20000
     slurm:
         conda_env: sysbio-sc
         modules:
             - cellbender/0.3.2
         array_limit: 50
-        mem: 64G
+        mem: 32G
         partition: gpu
         cpus: 1
         walltime: '8:00:00'
         ntasks: 1
         gres:
-            lscratch: 400    # GB requested in local scratch
-            gpu:v100x: 1     # one v100x gpu
+            lscratch: 50    # GB requested in local scratch
+            gpu:a100: 1     # one v100x gpu
 metadata:
     sample_libraries: AMP-AD_DiverseCohorts_assay_multiome_metadata.csv

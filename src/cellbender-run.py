@@ -10,7 +10,7 @@ except ModuleNotFoundError:
     sys.path.append('src')
     from sysbio_sc import *
 
-
+print(os.environ)
 
 #===================================================================================================
 # 01 Load config
@@ -41,16 +41,18 @@ require_command('cellbender')                                   # Exits if comma
 #  03 Build --libraries csv for running cellbender
 #===================================================================================================
 df = pd.read_csv(library_id_file, sep='\t')
+print(slurm_array_id)
 library_id = df.loc[df['N'] == slurm_array_id, 'libraryID'].iloc[0]
+print(library_id)
 
 input_h5 = require_path(path=data_dir / 'CELLRANGER' / library_id / 'raw_feature_bc_matrix.h5', label='cellranger h5', kind='file', create=False)
 output_h5 = data_dir / 'CELLBENDER' / f'{library_id}.h5'
 check_write_access(output_h5.parent)
 
-os.chdir(temp_dir)
+# os.chdir(temp_dir)
 
 
-cmd = ['cellbender','remove-background', '--cuda',
+cmd = ['bash', 'cellbender','remove-background', '--cuda',
        '--input', input_h5,
        '--output', output_h5]
 

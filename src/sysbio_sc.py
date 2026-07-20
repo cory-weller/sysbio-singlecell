@@ -70,6 +70,7 @@ def get_slurm_array_id():
     # Check running as slurm job ARRAY
     try:
         slurm_array_id = int(os.environ['SLURM_ARRAY_TASK_ID'])
+        return(slurm_array_id)
     except KeyError as e:
         raise KeyError(f"No SLURM job array task ID detected within environment, check this is running via sbatch --array") from e
 
