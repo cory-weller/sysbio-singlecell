@@ -121,9 +121,20 @@ def require_command(name):
         raise OSError(f"required bash command not found: {name}")
 
 def check_write_access(path):
+    '''
+    Consider a directory (or if a file is provided, consider its parent directory).
+    Create directory (and its parents) if necessary.
+    Return the absolute path if the directory is writable, otherwise raise error.
+    '''
     path = Path(path).resolve().absolute()
+    if path.is_file():
+        path = path.parent
     if not os.access(path, os.W_OK):
-        raise PermissionError(f"No write permissions for {path}")
+        try:
+            os.makedirs(path, exist_ok = True)
+            return(path)
+        except:
+            raise PermissionError(f"No write permissions for {path}")
 
 
 def to_ranges(nums):
