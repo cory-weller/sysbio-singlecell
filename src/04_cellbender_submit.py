@@ -70,7 +70,7 @@ else:
         sample_N = int(df.loc[df['libraryID'] == config.step.rerun_debug, 'N'].iloc[0])
         ids_to_run.append(sample_N)
     except IndexError as e:
-        raise RuntimeError(f"ERROR: Tried to run explicitly with a single sample, {config.step.rerun_debug}, which does not exist in {config.data_dir}/libraryIDs.txt") from e
+        raise RuntimeError(f"Tried to run explicitly with a single sample, {config.step.rerun_debug}, which does not exist in {config.data_dir}/libraryIDs.txt") from e
 
 
 print(f"INFO: {len(ids_to_run)} sample(s) to run")
