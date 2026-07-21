@@ -1,115 +1,107 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-
-# Imports
-import synapseclient
-import os
 import sys
-import yaml
-from pathlib import Path
-import pandas as pd
-import hashlib
+import time
+sys.tracebacklimit = 0
+
+try:
+    from sysbio_sc import *
+except ModuleNotFoundError:
+    try:
+        sys.path.append('src')
+        from sysbio_sc import *
+    except:
+        raise
+
+
+#===================================================================================================
+# 01 Load config
+#===================================================================================================
+
+project_dir = get_project_dir()                                 # Returns PosixPath object
+configfile = project_dir / 'config.yaml'                 # Default config name within project_dir
+config = import_config(configfile)                              # Loads as DotDict; exits if cannot load
+data_dir = project_dir / config.data_dir
+
+
+import synapseclient
 import asyncio
+import hashlib
+
+from synapseclient.models import (
+    File, Folder, Project, Table, EntityView, Dataset,
+    DatasetCollection, MaterializedView, SubmissionView, VirtualTable
+)
 
 
-def get_md5(filename):
+def get_md5(path:PosixPath):
+    path = str(path.resolve().absolute())
     hash_md5 = hashlib.md5()
-    with open(filename, "rb") as f:
+    with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
 
 async def main():
-
-    pwd = Path(os.getcwd())
-    pwd
-
-    # Load config from yaml file
-    with open("config.yaml") as f:
-        config = yaml.safe_load(f)
-
-    config
-
-
-
-
     # Authenticate to synapse
-    with open(os.path.expanduser(config['token']), 'r') as f:
+    if config.synapse.token.startswith('~'):
+        token_file = require_path(Path(config.synapse.token).expanduser(), label='synapse auth token', kind='file', create=False)
+    else:
+        token_file = require_path(config.synapse.token, label='synapse auth token', kind='file', create=False)
+    with open(token_file, 'r') as f:
         token = f.read().strip()
-        
+
     syn = synapseclient.login(authToken=token)
 
 
     # Import reads metadata file
-    metadata_filename = config['data_dir'] + '/' + config['file_metadata']
+    metadata_filename = data_dir / config.synapse.metadata_summary
     df = pd.read_csv(metadata_filename, sep='\t')
 
-
+    if config.synapse.clobber:
+        print(f"WARNING: synapse.clobber is set to True. Files will be removed and overwritten! Waiting 10 seconds before continuing")
+        time.sleep(10)
+                  
     bad_files = []
     good_files = []
-    retries = []        # Tuple (synid, filepath, version, meta_md5)
+    #retries = []        # Tuple (synid, filepath, version, meta_md5)
 
     # FIRST check of files
     # iterate over rows of metadata:
     for i in range(df.shape[0]):
         x = df.iloc[i]
-        filepath = Path('DATA/' + x['file_name'])
+        filepath = data_dir / x['file_name']
+        md5_filepath = Path(str(filepath) + '.md5')
         synid = x['synid']
         version = int(x['version_label'])
         meta_md5 = x['content_md5']
         
+        # Delete files clobber=True and files exist
+        if config.synapse.clobber:
+            for file in [filepath, md5_filepath]:
+                if file.exists():
+                    file.unlink()
+        
         # Download file if it does not exist
-        if not os.path.exists(filepath):
+        if not filepath.exists():
             await syn.get_async(synid, download_file=True,
                             downloadLocation=filepath.parent,
                             if_collision="overwrite.local",
                             synapse_client=syn)
         
         # Calculate md5 if it does not exist
-        if not os.path.exists(f"{filepath}.md5"):
-            file_md5 = get_md5(f"{filepath}")
+        if not md5_filepath.exists():
+            file_md5 = get_md5(filepath)
         else:
-            with open(f"{filepath}.md5", 'r') as infile:
+            with open(md5_filepath, 'r') as infile:
                 file_md5 = infile.read().strip()
         
         # Compare md5
         if file_md5 != meta_md5:
             print(f"{synid} Local file md5 ({file_md5}) does not match metadata md5 ({meta_md5}) for file {filepath} version {version}!")
-            print(f"Removing file {filepath} and retrying")
-            os.remove(filepath)
-            os.remove(f"{filepath}.md5")
-            retries.append((synid, filepath, version, meta_md5))
-        
-        # Only written if file md5 matches metadata md5
-        elif file_md5 == meta_md5:
-            good_files.append((synid, filepath, version, meta_md5))
-            with open(f"{filepath}.md5", 'w') as outfile:
-                outfile.write(file_md5 + '\n')
-
-
-    retries
-
-
-
-    # Retries:
-    # iterate over rows of metadata:
-    for synid, filepath, version, meta_md5 in retries:
-        
-        # Download file
-        await syn.get_async(synid, download_file=True,
-                        downloadLocation=filepath.parent,
-                        if_collision="overwrite.local",
-                        synapse_client=syn)
-        
-        # Calculate md5
-        file_md5 = get_md5(f"{filepath}")
-        
-        # Compare md5
-        if file_md5 != meta_md5:
-            print(f"{synid} Local file md5 ({file_md5}) still does not match metadata md5 ({meta_md5}) for file {filepath} version {version}!")
-            print(f"Removing files and NOT retrying")
+            print(f"Removing file {filepath}")
             os.remove(filepath)
             os.remove(f"{filepath}.md5")
             bad_files.append((synid, filepath, version, meta_md5))
@@ -119,16 +111,14 @@ async def main():
             good_files.append((synid, filepath, version, meta_md5))
             with open(f"{filepath}.md5", 'w') as outfile:
                 outfile.write(file_md5 + '\n')
+    print(f"Total files in {metadata_filename}: {df.shape[0]}")
+    print(f"Good files: {len(good_files)}")
+    print(f"Bad files: {len(bad_files)}")
 
-
-    good_files
-
-
-
-    bad_files
-
+    
     # Test if every file in metadata passed md5 check
-    print(df.shape[0] == len(good_files))
+    if df.shape[0] != len(good_files):
+        raise RuntimeError(f"Not all files pass md5 check. {len(bad_files)} bad files:\n{'\n'.join(bad_files)}")
 
 if __name__ == "__main__":
     asyncio.run(main())

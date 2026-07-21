@@ -1,12 +1,33 @@
+####################################################################################################
+# Project-wide parameters
+####################################################################################################
+
 data_dir: 'DATA'
-datasets:
-    - syn51753257   # metadata folder
-    - syn53643818   # fastqs folder
-token: ~/.synapsetoken
-clobber: False
-file_metadata: 'synapse-file-metadata.tsv'
-scratch: /lscratch                  # Temporary directory
+scratch: /lscratch                  # Temporary directory for HPC jobs
 conda_source: myconda               # e.g. when running "source myconda" before activating conda environments
+metadata:
+    sample_libraries: AMP-AD_DiverseCohorts_assay_multiome_metadata.csv
+
+####################################################################################################
+# 01 and 02 - Synapse metadata + data retrieval
+####################################################################################################
+synapse:
+    clobber: False                  # for metadata retrieval or actual file download
+    datasets:
+        - syn51753257   # metadata folder
+        - syn53643818   # fastqs folder
+    token: ~/.synapsetoken                      # Location of synapse authentication token
+    metadata_summary: 'synapse-file-metadata.tsv'
+    clobber: False
+    slurm:
+    conda_env: sysbio-sc
+    modules: None
+    
+
+
+####################################################################################################
+# 03 - Cellranger parameters
+####################################################################################################
 cellranger:
     clobber: False
     rerun_debug:  False            # force any single sample to be reran by itself, ignoring all other samples
@@ -27,6 +48,11 @@ cellranger:
         ntasks: 1
         gres:                   # other resource request
             lscratch:   400     # GB requested in local scratch
+
+
+####################################################################################################
+# 04 - Cellbender parameters
+####################################################################################################
 cellbender:
     clobber: False
     rerun_debug: False      # VR001-GEX
@@ -39,10 +65,9 @@ cellbender:
         mem: 32G
         partition: gpu
         cpus: 1
-        walltime: '8:00:00'
+        walltime: '3:00:00'
         ntasks: 1
         gres:
             lscratch: 50    # GB requested in local scratch
-            gpu:a100: 1     # one v100x gpu
-metadata:
-    sample_libraries: AMP-AD_DiverseCohorts_assay_multiome_metadata.csv
+            gpu:a100: 1     # one a100 gpu
+

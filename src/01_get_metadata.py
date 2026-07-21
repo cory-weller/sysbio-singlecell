@@ -1,43 +1,36 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-# # 01_get_metadata
-
-# In[ ]:
-
-
-# Imports
-import synapseclient
-import os
 import sys
-import yaml
-from pathlib import Path
+sys.tracebacklimit = 0
+
+try:
+    from sysbio_sc import *
+except ModuleNotFoundError:
+    try:
+        sys.path.append('src')
+        from sysbio_sc import *
+    except:
+        raise
+
+
+#===================================================================================================
+# 01 Load config
+#===================================================================================================
+
+project_dir = get_project_dir()                                 # Returns PosixPath object
+configfile = project_dir / 'config.yaml'                 # Default config name within project_dir
+config = import_config(configfile)                              # Loads as DotDict; exits if cannot load
+data_dir = project_dir / config.data_dir
+
+
+import synapseclient
 import asyncio
-import pickle
-from textwrap import dedent
 
 from synapseclient.models import (
     File, Folder, Project, Table, EntityView, Dataset,
     DatasetCollection, MaterializedView, SubmissionView, VirtualTable
 )
-
-def get_project_dir():
-    # Automatically determine project directory
-    try:
-        project_dir = Path(__file__).resolve().parent
-        text = dedent(f"""\
-                    INFO:\tProject Directory automatically determined from script location
-                    \tScript:\t{__file__}
-                    \tDir:\t{project_dir}\
-                    """)
-        print(text)
-    except NameError:
-        project_dir = os.getcwd()
-        text = dedent(f"""\
-                    INFO:\tsetting Project Direcetory to current working directory for interactive execution
-                    \t Dir: {os.getcwd()}\
-                    """)
-        print(text)
 
 
 def write_mdata(mdata, fn):
@@ -155,43 +148,37 @@ def flatten_files(node):
 
 
 async def main():
-    # Load config from yaml file
-    with open("config.yaml") as f:
-        config = yaml.safe_load(f)
-
-    config
-
 
     # Check if final output exists:
-    metadata_output = config['data_dir'] + '/' + config['file_metadata']
-    if os.path.exists(metadata_output):
-        if config['clobber']:
-            print(f"Final output {metadata_output} exists, but re-running anyway because clobber=True")
+    metadata_output = data_dir / config.synapse.metadata_summary
+    if metadata_output.exists():
+        if config.synapse.clobber:
+            print(f"Final output {metadata_output} exists, but re-running anyway because synapse.clobber=True")
         else:
-            raise SystemExit(f"Final output {metadata_output} exists, stopping because clobber=False")
+            raise RuntimeError(f"Final output {metadata_output} exists, stopping because synapse.clobber=False")
 
 
     # Authenticate to synapse
-    with open(os.path.expanduser(config['token']), 'r') as f:
+    if config.synapse.token.startswith('~'):
+        token_file = require_path(Path(config.synapse.token).expanduser(), label='synapse auth token', kind='file', create=False)
+    else:
+        token_file = require_path(config.synapse.token, label='synapse auth token', kind='file', create=False)
+    with open(token_file, 'r') as f:
         token = f.read().strip()
-
 
     syn = synapseclient.login(authToken=token)
 
 
     # Recursively syncfolder data
 
-    config_datasets = config['datasets']
-
+    config_datasets = config.synapse.datasets
+    # Ensure it is a list, even if length of 1
     if isinstance(config_datasets, str):
         datasets_ids = [config_datasets]
     else:
         datasets_ids = config_datasets
 
-    config_datasets
-
-
-    print(datasets_ids)
+    print(f"Retrieving metadata for datasets: {' '.join(datasets_ids)}")
 
     combined_metadata = []
     for synapse_id in datasets_ids:
@@ -199,8 +186,8 @@ async def main():
         combined_metadata += [extract_mdata(x) for x in mdata]
 
 
-    with open("combined_metadata.pkl", "wb") as file:
-        pickle.dump(combined_metadata, file)
+    # with open("combined_metadata.pkl", "wb") as file:
+    #     pickle.dump(combined_metadata, file)
 
     # Write to final metadata file for sequencing reads to output
     write_mdata(combined_metadata, metadata_output)
