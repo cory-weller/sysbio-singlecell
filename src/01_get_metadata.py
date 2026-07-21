@@ -155,7 +155,8 @@ async def main():
         if config.synapse.clobber:
             print(f"Final output {metadata_output} exists, but re-running anyway because synapse.clobber=True")
         else:
-            raise RuntimeError(f"Final output {metadata_output} exists, stopping because synapse.clobber=False")
+            print(f"Final output {metadata_output} exists, stopping because synapse.clobber=False")
+            return
 
 
     # Authenticate to synapse
@@ -197,3 +198,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    print("Completed successfully")
+    sys.exit(0)

@@ -120,5 +120,8 @@ async def main():
     if df.shape[0] != len(good_files):
         raise RuntimeError(f"Not all files pass md5 check. {len(bad_files)} bad files:\n{'\n'.join(bad_files)}")
 
+
 if __name__ == "__main__":
     asyncio.run(main())
+    print("Completed successfully")
+    sys.exit(0)
