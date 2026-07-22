@@ -1,10 +1,11 @@
-name: sysbio-sc
+name: sysbio_singlecell
 channels:
   - conda-forge
   - bioconda
 dependencies:
-  - python=>3.11
+  - python>3.11
   - pandas
+  - pyyaml
   - numpy
   - regex
   - pip                    # <- must be listed as a conda dependency
