@@ -17,7 +17,7 @@ except ModuleNotFoundError:
 # 01 Load config
 #===================================================================================================
 
-project_dir = get_project_dir()                                 # Returns PosixPath object
+project_dir = Path(os.getcwd())                                 # Returns PosixPath object
 configfile: project_dir / 'config.yaml'                 # Default config name within project_dir
 #config = import_config(configfile)                              # Loads as DotDict; exits if cannot load
 
@@ -27,14 +27,12 @@ config = DotDict(config)
 
 data_dir = project_dir / config.data_dir
 synapse_metadata_summary = data_dir / config.synapse.metadata_summary
-#!/usr/bin/env python3
 
-
-localrules: get_metadata, download_data
+localrules: get_metadata, download_data, prep_cellranger
 
 # ── Rules ──────────────────────────────────────────────────────
 rule all:
-    input: f"{data_dir}/download_data.done"
+    input: f"{data_dir}/download_data.done", data_dir / 'libraryIDs.txt'
 
 rule get_metadata:
     """
@@ -73,11 +71,12 @@ rule download_data:
         """
 
 rule prep_cellranger:
-    input:
-    output: data_dir / 'libraryIDs.txt'
+    output: libmap = str(data_dir / 'libraryIDs.txt')
+    conda: 'envs/sysbio_singlecell.yaml'
     run:
         # generate library ID file if it does not exist
-        library_id_file = data_dir / 'libraryIDs.txt'
+        print(output.libmap)
+        library_id_file = Path(output.libmap)
         library_metadata_file = find_file(config.metadata.sample_libraries)
         if not library_id_file.exists():
             dat = pd.read_csv(library_metadata_file)['libraryBatch'].unique()
@@ -87,20 +86,20 @@ rule prep_cellranger:
             })
             df.to_csv(library_id_file, index=False, sep='\t')
         else:
-            df = pd.read_csv(library_id_file, sep='\t')
+            pass
 
-rule cellranger:
-    input: data_dir / 'libraryIDs.txt'
-    output: data_dir/CELLRANGER/{libraryID}/
-    conda: 'envs/sysbio_singlecell.yaml'
-    resources:
-        slurm_partition: config.cellranger.slurm.partition
-        runtime:    config.cellranger.slurm.walltime
+# rule cellranger:
+#     input: data_dir / 'libraryIDs.txt'
+#     output: data_dir/CELLRANGER/{libraryID}/
+#     conda: 'envs/sysbio_singlecell.yaml'
+#     resources:
+#         slurm_partition: config.cellranger.slurm.partition
+#         runtime:    config.cellranger.slurm.walltime
         
-    modules:
-        - cellranger/10.1.0
-    shell:
-        """
-        python3 -u src/03_cellranger_submit.py
-        touch {output}
-        """
+#     envmodules:
+#         - cellranger/10.1.0
+#     shell:
+#         """
+#         python3 -u src/03_cellranger_submit.py
+#         touch {output}
+#         """

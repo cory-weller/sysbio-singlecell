@@ -7,7 +7,7 @@ import os
 import yaml
 import json
 import subprocess
-import regex as re
+#import regex as re
 import shutil
 
 class DotDict(dict):
