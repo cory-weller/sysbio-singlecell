@@ -31,20 +31,20 @@ synapse:
 cellranger:
     clobber: False
     rerun_debug:  False            # force any single sample to be reran by itself, ignoring all other samples
-    version: 10.1.0
     tool: count
     assay: Gene Expression
     transcriptome: /fdb/cellranger/refdata-gex-GRCh38-2024-A
     chemistry: ARC-v1
+    create_bam: True
     slurm:
         conda_env: sysbio-sc
         modules:
             - cellranger/10.1.0
         array_limit: 50         # maximum number of concurrent jobs running
         mem: 64G                # Suggested: 64G
-        partition: quick,norm        # Suggested: norm
+        partition: norm        # Suggested: norm
         cpus:   8               # Suggested: 8
-        walltime: '8:00:00'     # hours:min:sec, suggested: 8:00:00
+        walltime: '12:00:00'     # hours:min:sec, suggested: 8:00:00
         ntasks: 1
         gres:                   # other resource request
             lscratch:   400     # GB requested in local scratch
@@ -71,3 +71,20 @@ cellbender:
             lscratch: 50    # GB requested in local scratch
             gpu:a100: 1     # one a100 gpu
 
+####################################################################################################
+# 04 - Demultiplex parameters
+####################################################################################################
+freemuxlet:
+    clobber: False
+    rerun_debug: False
+    slurm:
+        modules:
+            - popscle/0.1_20210927
+        array_limit: 50
+        mem: 32G
+        partition: quick,norm
+        cpus: 1
+        walltime: '3:00:00'
+        ntasks: 1
+        gres:
+            lscratch: 50    # GB requested in local scratch
