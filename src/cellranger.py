@@ -2,6 +2,8 @@
 # coding: utf-8
 import argparse
 import sys
+import os
+print(os.environ)
 sys.tracebacklimit = 0
 
 try:
@@ -58,9 +60,10 @@ else:
 # 02 Pre-run Checks
 #===================================================================================================
 data_dir = require_path(project_dir / config.data_dir, label='data_dir', kind='dir', create=True)
-slurm_id = get_slurm_id()                                       # Exits if no SLURM_JOB_ID
-temp_dir = require_path(f"{config.scratch}/{slurm_id}", label='temporary workign directory', kind='dir', create=True)
-output_dir = require_path(data_dir / 'CELLRANGER' / library, 'CELLRANGER', label='Cellranger output dir', kind='dir', create=True)
+#slurm_id = get_slurm_id()                                       # Exits if no SLURM_JOB_ID
+
+temp_dir = require_path(os.environ['TMPDIR'], label='temporary workign directory', kind='dir', create=True)
+output_dir = require_path(data_dir / 'CELLRANGER' / library, label='Cellranger output dir', kind='dir', create=True)
 transcriptome_dir = require_path(config.cellranger.transcriptome, label='Transcriptome', kind='dir', create=False)  # Exits if does not exist
 check_write_access(temp_dir)                                    # Exits if not writable
 require_command('cellranger')                                   # Exits if command not in PATH
@@ -92,6 +95,7 @@ if config.cellranger.tool == 'count':
         '--chemistry', config.cellranger.chemistry,
         '--disable-cell-annotation',
         '--nosecondary']
+    print(cmd)
     try:
         cmd = [str(x) for x in cmd]
         print('Running command:')

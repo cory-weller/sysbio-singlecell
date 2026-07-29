@@ -46,7 +46,7 @@ def import_config(configfile):
     try:
         with open(configfile, 'r') as f:
             config = DotDict(yaml.safe_load(f))
-        print(json.dumps(config, indent=4, default=str))
+        #print(json.dumps(config, indent=4, default=str))
         return config
     except FileNotFoundError as e:
         raise FileNotFoundError(f"Couldn't load config file {configfile}, check paths?") from e

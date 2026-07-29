@@ -1,11 +1,11 @@
 #!/bin/bash
-
+#SBATCH --ntasks 1
 #SBATCH --cpus-per-task 1
-#SBATCH --mem-per-cpu=32G
-#SBATCH --time 96:00:00
+#SBATCH --mem-per-cpu 8G
+#SBATCH --time 24:00:00
 
 module purge
-module load snakemake/9
+module load singularity/4
 
 # block required for conda setup, prior to conda commands working
 __conda_setup="$('/data/$USER/conda/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
@@ -20,14 +20,11 @@ else
 fi
 unset __conda_setup
 
-# Pull profile, this will only run once, and is required for running on Biowulf
-if [ ! -d 'snakemake_profile' ]; then
-    git clone -b snakemake9 https://github.com/NIH-HPC/snakemake_profile.git
-fi
+# RUN SCRIPT
+# conda env create -f envs/sysbio_singlecell.yaml
+conda activate envs/sysbio_singlecell
 
-# Bind external directories on Biowulf: 
-# code from /usr/local/current/singularity/app_conf/sing_binds
-# spawn a subshell to protect the environment
+# Bindpath required for accessing various mounted locations on Biowulf
 export SINGULARITY_BINDPATH="$(
     unset gpfs_links link gpfs_dirs add_comma
     gpfs_links="$(/usr/bin/ls -d /gs*)"
@@ -44,7 +41,14 @@ export SINGULARITY_BINDPATH="$(
     [ -d /lscratch ] && export bindpath="${bindpath},/lscratch"
     echo $bindpath
 )"
-export APPTAINER_BINDPATH=$SINGULARITY_BINDPATH
 
-# RUN SCRIPT
-snakemake --cores 1 --use-conda  --use-envmodules --profile snakemake_profile 
+snakemake --unlock 
+
+snakemake --verbose -p --profile smk9_profile --conda-prefix envs
+# conda env create --file envs/sysbio_singlecell.yaml --prefix envs/sysbio_singlecell
+# Bind external directories on Biowulf: 
+# code from /usr/local/current/singularity/app_conf/sing_binds
+# spawn a subshell to protect the environment
+
+# export APPTAINER_BINDPATH=$SINGULARITY_BINDPATH
+

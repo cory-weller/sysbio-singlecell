@@ -1,0 +1,18 @@
+Bootstrap: docker
+From: continuumio/miniconda3
+
+%files
+    environment.yaml /opt/environment.yaml
+
+%post
+    # Create the environment from a spec file
+    /opt/conda/bin/conda env create -f /opt/environment.yaml
+
+    # Clean caches to shrink the image
+    /opt/conda/bin/conda clean --all --yes
+
+%environment
+    # Activate on every container invocation
+    source /opt/conda/etc/profile.d/conda.sh
+    conda activate singularityenv
+    export PATH=/opt/conda/envs/myenv/bin:$PATH

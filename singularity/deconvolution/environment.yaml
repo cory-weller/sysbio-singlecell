@@ -1,4 +1,4 @@
-name: sysbio_singlecell
+name: singularityenv
 channels:
     - conda-forge
     - bioconda
@@ -9,7 +9,7 @@ dependencies:
     - pyyaml
     - numpy
     - regex
+    - cellsnp-lite
     - pip           # <- must be listed as a conda dependency
-    - pip:
-        - synapseclient
-        - snakemake-executor-plugin-slurm
+    - pip:          # <- pip installations under second pip heading
+        - vireoSNP
