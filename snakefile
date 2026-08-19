@@ -30,16 +30,22 @@ synapse_metadata_summary = data_dir / config.synapse.metadata_summary
 data_dir = data_dir.as_posix()
 synapse_metadata_summary = synapse_metadata_summary.as_posix()
 
-localrules: get_metadata, build_library_mapping, build_ref_vcf
+localrules: get_metadata, build_library_mapping
 lscratch_tmpdir = "/lscratch/$SLURM_JOB_ID"
+
+libraries = list(LIBRARIES.keys())
+
+all_cellbender_output = expand(f"{data_dir}/CELLBENDER/{{libraryID}}/output.h5", libraryID=libraries)
+all_pileup_output = expand(f"{data_dir}/FREEMUXLET/{{libraryID}}/ALL_AF.vcf.gz", libraryID=libraries)
+all_intersect_output = expand(f"{data_dir}/FREEMUXLET/{{libraryID}}/AF.filtered.bam", libraryID=libraries)
+all_dsc_pileup_output = expand(f"{data_dir}/FREEMUXLET/{{libraryID}}/allsites_pileup.plp.gz", libraryID=libraries)
+all_freemuxlet_output = expand(f"{data_dir}/FREEMUXLET/{{libraryID}}/demux.clust1.samples.gz", libraryID=libraries)
+all_singlet_output=expand(f"{data_dir}/FREEMUXLET/{{libraryID}}/{{N}}-singlets.bam", libraryID=libraries, N=[0,1,2])
+#all_somalier_extract_output=expand(f"{data_dir}/FREEMUXLET/{{libraryID}}/{{N}}.somalier", libraryID=libraries, N=[0,1,2])
 
 # ── Rules ──────────────────────────────────────────────────────
 rule all: 
-    input: expand(f"{data_dir}/DEMUX/{{libraryID}}/cellSNP.cells.vcf.gz", libraryID=list(LIBRARIES.keys())[:1])
-    # f"{data_dir}/dsc-pileup-ref.vcf.gz"
-    #expand(f"{data_dir}/CELLBENDER/{{libraryID}}/output.h5", libraryID=list(LIBRARIES.keys())),
-            
-           #
+    input: all_singlet_output
 
 
 
@@ -120,7 +126,9 @@ rule run_cellranger:
     of input metadata in order to get a list of libraries.
     '''
     input: ancient('cellranger-libraries.yaml')
-    output: f"{data_dir}/CELLRANGER/{{libraryID}}/raw_feature_bc_matrix.h5"
+    output: 
+        h5=f"{data_dir}/CELLRANGER/{{libraryID}}/raw_feature_bc_matrix.h5",
+        bam=f"{data_dir}/CELLRANGER/{{libraryID}}/possorted_genome_bam.bam",
     conda: 'envs/sysbio_singlecell'
     params:
         PAR_SLURM_ID=os.environ['SLURM_JOB_ID'],
@@ -129,7 +137,7 @@ rule run_cellranger:
     shell:
         '''
         if [ -z ${{SLURM_JOB_ID:-}} ]; then export SLURM_JOB_ID={params.PAR_SLURM_ID}; fi; export TMPDIR=/lscratch/$SLURM_JOB_ID
-        python3 src/cellranger.py --library {wildcards.libraryID} && touch {output}
+        python3 src/cellranger.py --library {wildcards.libraryID} && touch {output.h5}
         '''
 
 rule run_cellbender:
@@ -157,78 +165,243 @@ rule run_cellbender:
         
         '''
 
-rule build_ref_vcf:
+
+
+
+rule pileup:
     '''
-    Builds reference VCF for use with dsc-pileup prior to freemuxlet
+    Generates library-specific VCF for subsetting bam
+    ~60 min runtime with 12 cpu
     '''
-    output: f"{data_dir}/dsc-pileup-ref.vcf.gz"
+    input: bam=f"{data_dir}/CELLRANGER/{{libraryID}}/possorted_genome_bam.bam"
+    output: f"{data_dir}/FREEMUXLET/{{libraryID}}/ALL_AF.vcf.gz"
     params:
         PAR_SLURM_ID=os.environ['SLURM_JOB_ID'],
-        OUTDIR=data_dir
+        OUTDIR=f"{data_dir}/FREEMUXLET/{{libraryID}}/",
+        REF_FASTA='/fdb/cellranger/refdata-gex-GRCh38-2024-A/fasta/genome.fa'
+    envmodules:
+        'bcftools/1.23'
     shell:
         '''
         if [ -z ${{SLURM_JOB_ID:-}} ]; then export SLURM_JOB_ID={params.PAR_SLURM_ID}; fi; export TMPDIR=/lscratch/$SLURM_JOB_ID
+
+        bash src/pileup.sh {input.bam} {params.OUTDIR} {params.REF_FASTA}
+        '''
+
+
+rule intersect:
+    '''
+    Generates filtered (for reduced memory usage) bam file needed for popscle dsc-pileup
+    ~60 mins with 1 cpu
+    '''
+    input:
+        cellranger_bam=f"{data_dir}/CELLRANGER/{{libraryID}}/possorted_genome_bam.bam",
+        vcf=f"{data_dir}/FREEMUXLET/{{libraryID}}/ALL_AF.vcf.gz"
+    output:
+        intersect_bam=f"{data_dir}/FREEMUXLET/{{libraryID}}/AF.filtered.bam"
+    envmodules:
+        'bedtools/2.31.1'
+    shell:
+        '''
+        bedtools intersect \
+            -a {input.cellranger_bam} \
+            -b {input.vcf} \
+            -u > {output.intersect_bam}
+        '''
+
+
+
+rule dsc_pileup:
+    '''
+    Generates files required for freemuxlet
+    '''
+    input:
+        bam=f"{data_dir}/FREEMUXLET/{{libraryID}}/AF.filtered.bam",
+        vcf=f"{data_dir}/FREEMUXLET/{{libraryID}}/ALL_AF.vcf.gz"
+    output:
+        f"{data_dir}/FREEMUXLET/{{libraryID}}/allsites_pileup.plp.gz"
+    envmodules:
+        'popscle/0.1_20210927'
+    params:
+        workdir=f"{data_dir}/FREEMUXLET/{{libraryID}}"
+    shell:
+        '''
+        cd {params.workdir}
         
-        bash src/build-vcf-ref.sh {params.OUTDIR}
+        popscle dsc-pileup \
+            --sam {input.bam} \
+            --vcf {input.vcf} \
+            --out allsites_pileup
         '''
 
-rule download_demux_vcf:
-    '''
-    retrieve pre-made VCF from cellsnp-lite team, hosted on sourceforge
-    '''
-    output: f"{data_dir}/DEMUX/genome1K.phase3.SNP_AF5e4.chr1toX.hg38.vcf.gz"
-    shell:
-        '''
-        mkdir -p {data_dir}/DEMUX && cd {data_dir}/DEMUX
-        wget https://sourceforge.net/projects/cellsnp/files/SNPlist/genome1K.phase3.SNP_AF5e4.chr1toX.hg38.vcf.gz
-        '''
 
-rule cellsnp_lite:
+rule freemuxlet:
     '''
-    generates pileup (required to run vireo), a more modern replacement for dsc-pileup
+    Generates predicted donor groups in multiplexed 10X sequencing run
     '''
-    input: bam=f"{data_dir}/CELLRANGER/{{libraryID}}/possorted_genome_bam.bam",
-            barcodes=f"{data_dir}/CELLRANGER/{{libraryID}}/filtered_feature_bc_matrix/barcodes.tsv.gz",
-            vcf=f"{data_dir}/DEMUX/genome1K.phase3.SNP_AF5e4.chr1toX.hg38.vcf.gz"
-    output: f"{data_dir}/DEMUX/{{libraryID}}/cellSNP.cells.vcf.gz"
-    envmodules: 'singularity/4.3.7'
-    container: 'singularity/deconvolution/container.sif'
-    threads: 10
+    input:
+        bam=f"{data_dir}/FREEMUXLET/{{libraryID}}/allsites_pileup.plp.gz",
+    output:
+        f"{data_dir}/FREEMUXLET/{{libraryID}}/demux.clust1.samples.gz"
+    envmodules:
+        'popscle/0.1_20210927',
     params:
-        PAR_SLURM_ID=os.environ['SLURM_JOB_ID'],
-        OUTDIR= f"{data_dir}/DEMUX/{{libraryID}}/"
+        workdir= f"{data_dir}/FREEMUXLET/{{libraryID}}",
+        nsamples=3,
+        min_umi=500,
+        min_reads=100
+
     shell:
         '''
-        if [ -z ${{SLURM_JOB_ID:-}} ]; then export SLURM_JOB_ID={params.PAR_SLURM_ID}; fi; export TMPDIR=/lscratch/$SLURM_JOB_ID
-        cd $TMPDIR
-        cellsnp-lite -s {input.bam} -b {input.barcodes} -O {params.OUTDIR} -R {input.vcf} -p {threads} --genotype --minMAF 0.1 --minCOUNT 20 --gzip
-        mkdir -p {params.OUTDIR}
-        cp cellSNP.* {params.OUTDIR}
+        cd {params.workdir}
+
+        popscle freemuxlet \
+            --plp allsites_pileup \
+            --min-umi {params.min_umi} \
+            --nsample {params.nsamples} \
+            --out demux
+        
+        zcat {output} | awk '$2 != "." && $4 >= {params.min_reads} && $5 == "SNG" {{f=$13".singlets"; print $2 > f}}'
         '''
 
 
+rule get_singlets:
+    '''
+    splits 10x cellranger bam into three groups of singlet droplets,
+    as defined by the output of freemuxlet
+    '''
+    input: 
+        demux=f"{data_dir}/FREEMUXLET/{{libraryID}}/demux.clust1.samples.gz",
+        cr_bam=f"{data_dir}/CELLRANGER/{{libraryID}}/possorted_genome_bam.bam"
+    output: f"{data_dir}/FREEMUXLET/{{libraryID}}/{{N}}-singlets.bam",
+            f"{data_dir}/FREEMUXLET/{{libraryID}}/{{N}}.somalier"
+    params:
+        workdir= f"{data_dir}/FREEMUXLET/{{libraryID}}",
+        tenx_subset_binary=f"{data_dir}/subset-bam_linux",
+        somalier_binary=f"{data_dir}/somalier",
+        somalier_sites=f"{data_dir}/sites.hg38.rna.vcf.gz",
+        REF_FASTA='/fdb/cellranger/refdata-gex-GRCh38-2024-A/fasta/genome.fa'
+    envmodules: 'samtools/1.23'
+    shell:
+        '''
+        cd {params.workdir}
+        {params.tenx_subset_binary} \
+            --bam {input.cr_bam} \
+            --cores {resources.cpus_per_task} \
+            --cell-barcodes {wildcards.N}.singlets \
+            --out-bam {wildcards.N}-singlets.bam
+        samtools index {wildcards.N}-singlets.bam
+        export SOMALIER_SAMPLE_NAME="{wildcards.libraryID}.{wildcards.N}" && \
+        {params.somalier_binary} extract -d extracted{wildcards.N}/ --sites {params.somalier_sites} -f {params.REF_FASTA} {wildcards.N}-singlets.bam && \
+        mv extracted{wildcards.N}/*.somalier {wildcards.N}.somalier && rmdir extracted{wildcards.N}
+        '''
 
 
-
-
-# rule dsc_pileup:
+# rule somalier_extract:
 #     '''
-#     generates pileup (required to run freemuxlet)
 #     '''
-#     input: bam=f"{data_dir}/CELLRANGER/{{libraryID}}/possorted_genome_bam.bam",
-#             vcf=f"{data_dir}/dsc-pileup-ref.vcf.gz"
-#     output: f"{data_dir}/FREEMUXLET/{{libraryID}}/dsc-pileup.var"
-#     envmodules:
-#         'popscle/0.1_20210927'
+#     input:
+#         bam0=f"{data_dir}/FREEMUXLET/{{libraryID}}/0-singlets.bam",
+#         bam1=f"{data_dir}/FREEMUXLET/{{libraryID}}/1-singlets.bam",
+#         bam2=f"{data_dir}/FREEMUXLET/{{libraryID}}/2-singlets.bam"
+#     output:
+#         f"{data_dir}/FREEMUXLET/{{libraryID}}/0.somalier",
+#         f"{data_dir}/FREEMUXLET/{{libraryID}}/1.somalier",
+#         f"{data_dir}/FREEMUXLET/{{libraryID}}/2.somalier"
 #     params:
+#         workdir= f"{data_dir}/FREEMUXLET/{{libraryID}}",
+#         somalier_binary=f"{data_dir}/somalier",
+#         somalier_sites=f"{data_dir}/sites.hg38.rna.vcf.gz",
+#         REF_FASTA='/fdb/cellranger/refdata-gex-GRCh38-2024-A/fasta/genome.fa'
+#     envmodules:
+#         'samtools/1.23'
+#     shell:
+#         '''
+#         cd {params.workdir}
+#         for i in 0 1 2; do
+#             export SOMALIER_SAMPLE_NAME="{wildcards.libraryID}.$i" && \
+#             {params.somalier_binary} extract -d extracted$i/ --sites {params.somalier_sites} -f {params.REF_FASTA} $i-singlets.bam && \
+#         done
+#         '''
+# ../../somalier extract -d extracted0 --sites ../../sites.hg38.rna.vcf.gz -f /fdb/cellranger/refdata-gex-GRCh38-2024-A/fasta/genome.fa 0-singlets.bam
+# rule freemuxlet:
+#     '''
+    
+#     '''
+#     input:
+#         bam=f"{data_dir}/CELLRANGER/{{libraryID}}/possorted_genome_bam.bam",
+#     output:
+#         f"{data_dir}/POPSCLE/{{libraryID}}/{libraryID}.clust1.samples.gz"
+#     envmodules:
+#         'popscle/0.1_20210927',
+#         'samtools/1.23'
+#     params:
+#         fasta='/fdb/cellranger/refdata-gex-GRCh38-2024-A/fasta/genome.fa',
 #         PAR_SLURM_ID=os.environ['SLURM_JOB_ID'],
-#         OUTDIR= f"{data_dir}/FREEMUXLET/{{libraryID}}/"
+#         OUTDIR= f"{data_dir}/FREEMUXLET/{{libraryID}}/",
+#         nsamples=3
 #     shell:
 #         '''
 #         if [ -z ${{SLURM_JOB_ID:-}} ]; then export SLURM_JOB_ID={params.PAR_SLURM_ID}; fi; export TMPDIR=/lscratch/$SLURM_JOB_ID
 #         cd $TMPDIR
-#         popscle dsc-pileup --out dsc-pileup --vcf {input.vcf} --sam {input.bam}
+        
+#         bcftools mpileup -d 8000 -f {params.fasta} {input.bam} | bcftools call --ploidy GRCh38 -v -m -Oz -o {libraryID}.vcf.gz
+#         bcftools +fill-tags {libraryID}.vcf.gz -Oz -o {libraryID}_AF.vcf.gz -- -t AF
+#         bedtools intersect -a {input.bam} -b {libraryID}.vcf.gz -u > {libraryID}.filtered.bam
+#         popscle dsc-pileup --sam {libraryID}.filtered.bam --vcf {libraryID}_AF.vcf.gz --out allsites_pileup
+#         popscle freemuxlet --plp allsites_pileup --nsample {params.nsamples} --out demultiplexed_allsites_gt
+        
 #         mkdir -p {params.OUTDIR}
-#         cp dsc-pileup* {params.OUTDIR}
-
+#         cp demultiplexed_allsites_gt* {params.OUTDIR}
 #         '''
+
+# rule build_ref_vcf:
+#     '''
+#     Builds reference VCF for use with dsc-pileup prior to freemuxlet
+#     '''
+#     output: f"{data_dir}/dsc-pileup-ref.vcf.gz"
+#     params:
+#         PAR_SLURM_ID=os.environ['SLURM_JOB_ID'],
+#         OUTDIR=data_dir
+#     shell:
+#         '''
+#         if [ -z ${{SLURM_JOB_ID:-}} ]; then export SLURM_JOB_ID={params.PAR_SLURM_ID}; fi; export TMPDIR=/lscratch/$SLURM_JOB_ID
+        
+#         bash src/build-vcf-ref.sh {params.OUTDIR}
+#         '''
+
+# rule download_demux_vcf:
+#     '''
+#     retrieve pre-made VCF from cellsnp-lite team, hosted on sourceforge
+#     '''
+#     output: f"{data_dir}/DEMUX/genome1K.phase3.SNP_AF5e4.chr1toX.hg38.vcf.gz"
+#     shell:
+#         '''
+#         mkdir -p {data_dir}/DEMUX && cd {data_dir}/DEMUX
+#         wget https://sourceforge.net/projects/cellsnp/files/SNPlist/genome1K.phase3.SNP_AF5e4.chr1toX.hg38.vcf.gz
+#         '''
+
+# rule cellsnp_lite:
+#     '''
+#     generates pileup (required to run vireo), a more modern replacement for dsc-pileup
+#     '''
+#     input: bam=f"{data_dir}/CELLRANGER/{{libraryID}}/possorted_genome_bam.bam",
+#             barcodes=f"{data_dir}/CELLRANGER/{{libraryID}}/filtered_feature_bc_matrix/barcodes.tsv.gz",
+#             vcf=f"{data_dir}/DEMUX/genome1K.phase3.SNP_AF5e4.chr1toX.hg38.vcf.gz"
+#     output: f"{data_dir}/DEMUX/{{libraryID}}/cellSNP.cells.vcf.gz"
+#     envmodules: 'singularity/4.3.7'
+#     container: 'singularity/deconvolution/container.sif'
+#     threads: 10
+#     params:
+#         PAR_SLURM_ID=os.environ['SLURM_JOB_ID'],
+#         OUTDIR= f"{data_dir}/DEMUX/{{libraryID}}/"
+#     shell:
+#         '''
+#         if [ -z ${{SLURM_JOB_ID:-}} ]; then export SLURM_JOB_ID={params.PAR_SLURM_ID}; fi; export TMPDIR=/lscratch/$SLURM_JOB_ID
+#         cd $TMPDIR
+#         cellsnp-lite -s {input.bam} -b {input.barcodes} -O {params.OUTDIR} -R {input.vcf} -p {threads} --genotype --minMAF 0.1 --minCOUNT 20 --gzip
+#         mkdir -p {params.OUTDIR}
+#         cp cellSNP.* {params.OUTDIR}
+#         '''
+
+

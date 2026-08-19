@@ -34,8 +34,6 @@ cellranger:
     transcriptome: /fdb/cellranger/refdata-gex-GRCh38-2024-A
     chemistry: ARC-v1
     create_bam: True
-    modules:
-        - 
 
 
 

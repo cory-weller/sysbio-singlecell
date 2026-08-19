@@ -25,26 +25,20 @@ unset __conda_setup
 conda activate envs/sysbio_singlecell
 
 # Bindpath required for accessing various mounted locations on Biowulf
+# spawn a subshell to protect the environment
 export SINGULARITY_BINDPATH="$(
-    unset gpfs_links link gpfs_dirs add_comma
-    gpfs_links="$(/usr/bin/ls -d /gs*)"
-
-    # check to see if any gs* links are broken
-    for link in $gpfs_links; do 
-        if [ -e "${link}" ]; then
-            gpfs_dirs+="${add_comma:-}${link}"
-            # only prepend the comma _after_ the first iteration 
-            add_comma=,
-        fi
-    done
-    bindpath="${gpfs_dirs:-},/vf,/spin1,/data,/fdb,/gpfs"
-    [ -d /lscratch ] && export bindpath="${bindpath},/lscratch"
+    bindpath="/vf,/spin1,/data,/fdb"
+    [ -d /lscratch ] && bindpath="${bindpath},/lscratch"
+    [ -d /scratch ] && bindpath="${bindpath},/scratch"
     echo $bindpath
 )"
+export APPTAINER_BINDPATH=$SINGULARITY_BINDPATH
+
 
 snakemake --unlock 
 
-snakemake --verbose -p --profile smk9_profile --conda-prefix envs
+snakemake --nolock --verbose -p --profile smk9_profile --conda-prefix envs
+
 # conda env create --file envs/sysbio_singlecell.yaml --prefix envs/sysbio_singlecell
 # Bind external directories on Biowulf: 
 # code from /usr/local/current/singularity/app_conf/sing_binds
