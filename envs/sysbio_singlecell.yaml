@@ -8,6 +8,11 @@ dependencies:
     - pandas
     - pyyaml
     - numpy
+    - scanpy
+    - scrublet
+    - scikit-image
+    - anndata
+    - scipy
     - regex
     - pip           # <- must be listed as a conda dependency
     - pip:
