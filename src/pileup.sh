@@ -16,6 +16,10 @@ pileup() {
 
 export -f pileup
 
+if [ ! -f ${BAM}.bai ]; then
+    samtools index --threads 6 ${BAM}
+fi
+
 # Build array of chr to iterate over with parallel
 chrs=( chr{1..22} chrX )
 
